@@ -41,7 +41,7 @@ if "butce" not in st.session_state:
         columns=["ID", "Tür", "Kategori", "Hedef Bütçe (TL)"]
     )
 
-# 8 ODALI YENİ İSİMLENDİRME
+# 8 ODALI İSİMLENDİRME
 ODALAR = ["111", "222", "333", "444", "555", "666", "777", "888"]
 KATEGORILER = ["Oda Konaklama", "Restoran/Kafe", "Personel Maaşı", "Fatura/Aidat", "Tedarik/Malzeme", "Diğer"]
 
@@ -156,94 +156,4 @@ with tab2:
 
 # ---------------------------------------------------------
 # TAB 3: REZERVASYON LİSTESİ VE SİLME İŞLEMİ
-# ---------------------------------------------------------
-with tab3:
-    st.subheader("📋 Mevcut Rezervasyonlar ve Silme")
-    
-    df = st.session_state["rezervasyonlar"]
-    
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-        st.divider()
-        st.subheader("🗑️ Rezervasyon Sil")
-        
-        silinecek_id = st.selectbox(
-            "Silmek istediğiniz rezervasyon kaydını seçin:",
-            options=df["ID"].tolist(),
-            format_func=lambda x: f"ID: {x} - Müşteri: {df[df['ID'] == x]['Müşteri Adı'].values[0]} (Oda: {df[df['ID'] == x]['Oda No'].values[0]})"
-        )
-        
-        if st.button("Seçilen Rezervasyonu Sil", type="secondary"):
-            st.session_state["rezervasyonlar"] = df[df["ID"] != silinecek_id].reset_index(drop=True)
-            st.success(f"ID: {silinecek_id} numaralı rezervasyon başarıyla silindi!")
-            st.rerun()
-    else:
-        st.info("Sistemde henüz kayıtlı bir rezervasyon bulunmuyor.")
-
-# ---------------------------------------------------------
-# TAB 4: NAKİT AKIŞI & GRUPLAR TOPLAMI
-# ---------------------------------------------------------
-with tab4:
-    st.subheader("💰 Nakit Akışı & Sınıf/Kategori Grupları")
-    
-    df_f = st.session_state["finans"]
-    
-    if not df_f.empty:
-        toplam_gelir = float(df_f[df_f["Tür"] == "Gelir"]["Tutar (TL)"].sum())
-        toplam_gider = float(df_f[df_f["Tür"] == "Gider"]["Tutar (TL)"].sum())
-    else:
-        toplam_gelir = 0.0
-        toplam_gider = 0.0
-        
-    net_bakiye = toplam_gelir - toplam_gider
-    
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("Toplam Gelir", f"{toplam_gelir:,.2f} TL")
-    col_m2.metric("Toplam Gider", f"{toplam_gider:,.2f} TL")
-    col_m3.metric("Net Bakiye (Kâr / Zarar)", f"{net_bakiye:,.2f} TL")
-    
-    st.divider()
-    
-    st.subheader("📊 Sınıf / Kategori Bazında Toplamlar")
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        st.markdown("#### 🟢 Gelir Grupları")
-        if not df_f.empty and not df_f[df_f["Tür"] == "Gelir"].empty:
-            gelir_ozet = df_f[df_f["Tür"] == "Gelir"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
-            st.dataframe(gelir_ozet, use_container_width=True)
-        else:
-            st.info("Henüz kaydedilmiş gelir bulunmuyor.")
-            
-    with col_g2:
-        st.markdown("#### 🔴 Gider Grupları")
-        if not df_f.empty and not df_f[df_f["Tür"] == "Gider"].empty:
-            gider_ozet = df_f[df_f["Tür"] == "Gider"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
-            st.dataframe(gider_ozet, use_container_width=True)
-        else:
-            st.info("Henüz kaydedilmiş gider bulunmuyor.")
-
-    st.divider()
-    
-    st.subheader("➕ Yeni Gelir / Gider Ekle")
-    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-    
-    with col_f1:
-        f_tur = st.selectbox("İşlem Türü", ["Gelir", "Gider"], key="f_tur_input")
-    with col_f2:
-        f_kategori = st.selectbox("Kategori", KATEGORILER, key="f_kat_input")
-    with col_f3:
-        f_tutar = st.number_input("Tutar (TL)", min_value=0.0, value=500.0, step=100.0, key="f_tut_input")
-    with col_f4:
-        f_tarih = st.date_input("İşlem Tarihi", value=date.today(), key="f_tar_input")
-        
-    f_aciklama = st.text_input("Açıklama (Örn: Personel maaşı, Elektrik faturası vb.)", key="f_ack_input")
-    
-    if st.button("Finans Kaydını Ekle", type="primary"):
-        f_id = 1 if df_f.empty else int(df_f["ID"].max()) + 1
-        yeni_finans_kaydi = pd.DataFrame([{
-            "ID": f_id,
-            "Tarih": f_tarih,
-            "Tür": f_tur,
-            "Kategori": f_kategori,
-            "Açıklama": f_aciklama if f_aciklama.strip() else f_kategori,
+# 
