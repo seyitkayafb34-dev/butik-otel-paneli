@@ -1,4 +1,129 @@
 import streamlit as st
+import pandas as pd
+from datetime import datetime, date
+
+st.set_page_config(page_title="Butik Otel Paneli", layout="wide")
+
+# --- KULLANICI GİRİŞ KONTROLÜ ---
+USERS = {
+    "admin": "yigido58"  # Kendi kullanıcı adı ve şifrenizle değiştirin
+}
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.title("🔒 Butik Otel Paneli Girişi")
+    username = st.text_input("Kullanıcı Adı")
+    password = st.text_input("Şifre", type="password")
+    if st.button("Giriş Yap"):
+        if username in USERS and USERS[username] == password:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Hatalı kullanıcı adı veya şifre!")
+    st.stop()
+
+# --- VERİ ALANI HAZIRLIĞI ---
+# Mevcut rezervasyonları saklamak için hafıza alanı
+if "rezervasyonlar" not in st.session_state:
+    st.session_state["rezervasyonlar"] = pd.DataFrame(
+        columns=["Müşteri Adı", "Oda No", "Giriş Tarihi", "Çıkış Tarihi"]
+    )
+
+ODALAR = ["101 - Delüks Oda", "102 - Manzaralı Suit", "103 - Standart Oda", "104 - Aile Odası"]
+
+st.title("🏨 Butik Otel Yönetim Paneli")
+
+# Sekmeler oluşturuyoruz
+tab1, tab2 = st.tabs(["➕ Yeni Rezervasyon Ekleyin", "📅 Oda Doluluk Takvimi & Durumu"])
+
+# ---------------------------------------------------------
+# TAB 1: REZERVASYON EKLEME & ÇAKIŞMA KONTROLÜ
+# ---------------------------------------------------------
+with tab1:
+    st.subheader("Yeni Rezervasyon Oluştur")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        musteri = st.text_input("Müşteri Adı Soyadı")
+        secilen_oda = st.selectbox("Oda Seçin", ODALAR)
+    with col2:
+        giris_tarihi = st.date_input("Giriş Tarihi", min_value=date.today())
+        cikis_tarihi = st.date_input("Çıkış Tarihi", min_value=giris_tarihi)
+
+    if st.button("Rezervasyonu Kaydet"):
+        if giris_tarihi >= cikis_tarihi:
+            st.error("Çıkış tarihi, giriş tarihinden sonra olmalıdır!")
+        elif not musteri.strip():
+            st.error("Lütfen müşteri adını giriniz.")
+        else:
+            # --- ÇAKIŞMA KONTROLÜ (Aynı Oda ve Tarih Kesişimi) ---
+            df = st.session_state["rezervasyonlar"]
+            
+            # Seçilen odanın mevcut rezervasyonlarını filtrele
+            oda_rezervasyonlari = df[df["Oda No"] == secilen_oda]
+            
+            cakisma = False
+            for _, row in oda_rezervasyonlari.iterrows():
+                m_giris = row["Giriş Tarihi"]
+                m_cikis = row["Çıkış Tarihi"]
+                
+                # Tarih aralıklarının kesişip kesişmediğini kontrol et
+                if not (cikis_tarihi <= m_giris or giris_tarihi >= m_cikis):
+                    cakisma = True
+                    break
+            
+            if cakisma:
+                st.error(f"❌ **{secilen_oda}** seçilen tarihler arasında ({giris_tarihi} - {cikis_tarihi}) DOLUDUR! Başka bir tarih veya oda seçiniz.")
+            else:
+                yeni_kayit = pd.DataFrame([{
+                    "Müşteri Adı": musteri,
+                    "Oda No": secilen_oda,
+                    "Giriş Tarihi": giris_tarihi,
+                    "Çıkış Tarihi": cikis_tarihi
+                }])
+                st.session_state["rezervasyonlar"] = pd.concat([df, yeni_kayit], ignore_index=True)
+                st.success(f"✅ {secilen_oda} için {musteri} adına rezervasyon başarıyla oluşturuldu!")
+
+# ---------------------------------------------------------
+# TAB 2: ODALARIN DOLU/BOŞ TARİH EKRANI
+# ---------------------------------------------------------
+with tab2:
+    st.subheader("Tarih Bazlı Oda Doluluk Durumu")
+    
+    sorgu_tarihi = st.date_input("Hangi Tarihteki Durumu Görmek İstiyorsunuz?", value=date.today())
+    
+    df = st.session_state["rezervasyonlar"]
+    
+    # Seçilen tarihte hangi odaların dolu olduğunu tespit et
+    dolu_odalar = []
+    dolu_detay = {}
+    
+    for _, row in df.iterrows():
+        if row["Giriş Tarihi"] <= sorgu_tarihi < row["Çıkış Tarihi"]:
+            dolu_odalar.append(row["Oda No"])
+            dolu_detay[row["Oda No"]] = row["Müşteri Adı"]
+
+    st.markdown(f"### 📊 **{sorgu_tarihi.strftime('%d.%m.%Y')}** Tarihindeki Odaların Durumu")
+    
+    # Visual Kartlar (Metrikler) Halinde Gösterim
+    cols = st.columns(len(ODALAR))
+    for idx, oda in enumerate(ODALAR):
+        with cols[idx]:
+            if oda in dolu_odalar:
+                st.error(f"🔴 **{oda}**\n\n**DOLU**\n\nMüşteri: {dolu_detay[oda]}")
+            else:
+                st.success(f"🟢 **{oda}**\n\n**BOŞ**\n\nKonaklamaya Uygun")
+
+    st.divider()
+    st.subheader("📋 Tüm Rezervasyon Listesi")
+    if not df.empty:
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Henüz kaydedilmiş bir rezervasyon bulunmuyor.")
+
+import streamlit as st
 
 # Kullanıcı adı ve şifre tanımlamaları
 USERS = {
