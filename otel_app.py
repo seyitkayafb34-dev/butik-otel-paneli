@@ -7,7 +7,7 @@ st.set_page_config(page_title="Butik Otel Paneli", layout="wide")
 
 # --- KULLANICI GİRİŞ KONTROLÜ ---
 USERS = {
-    "admin": "Otel2026!Sifre"  # Kendi kullanıcı adı ve şifrenizi girin
+    "admin": "yigido58"  # Kendi kullanıcı adı ve şifrenizi girin
 }
 
 if "authenticated" not in st.session_state:
