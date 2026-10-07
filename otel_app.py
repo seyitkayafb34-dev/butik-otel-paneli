@@ -36,12 +36,17 @@ if not st.session_state["authenticated"]:
             st.error("Hatalı kullanıcı adı veya şifre!")
     st.stop()
 
-# Sol Menüye Çıkış Yap Butonu
-with st.sidebar:
-    st.write("👤 **Oturum:** Aktif")
-    if st.button("🔴 Çıkış Yap"):
+# --- HEADER & ÇIKIŞ BUTONU (SOL MENÜSÜZ, TAM EKRAN DÜZENİ) ---
+col_head1, col_head2 = st.columns([8, 2])
+with col_head1:
+    st.title("🏨 Butik Otel Yönetim Paneli")
+with col_head2:
+    st.write("") # Dikey hiza ayarı
+    if st.button("🔴 Oturumu Kapat", type="secondary"):
         st.session_state["authenticated"] = False
         st.rerun()
+
+st.divider()
 
 # --- VERİ ALANLARI (SESSION STATE HAZIRLIĞI) ---
 if "rezervasyonlar" not in st.session_state:
@@ -61,8 +66,6 @@ if "butce" not in st.session_state:
 
 ODALAR = ["111", "222", "333", "444", "555", "666", "777", "888"]
 KATEGORILER = ["Oda Konaklama", "Restoran/Kafe", "Personel Maaşı", "Fatura/Aidat", "Tedarik/Malzeme", "Diğer"]
-
-st.title("🏨 Butik Otel Yönetim Paneli")
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "➕ Yeni Rezervasyon", 
