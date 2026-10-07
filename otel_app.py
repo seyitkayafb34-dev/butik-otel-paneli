@@ -18,7 +18,7 @@ def format_tl(val, kurus=False):
 
 # --- KULLANICI GİRİŞ KONTROLÜ (OTURUM KORUMALI) ---
 USERS = {
-    "admin": "yigido58"
+    "Admin": "Yigido58"
 }
 
 if "authenticated" not in st.session_state:
@@ -41,7 +41,7 @@ col_head1, col_head2 = st.columns([8, 2])
 with col_head1:
     st.title("🏨 Butik Otel Yönetim Paneli")
 with col_head2:
-    st.write("") # Dikey hiza ayarı
+    st.write("") 
     if st.button("🔴 Oturumu Kapat", type="secondary"):
         st.session_state["authenticated"] = False
         st.rerun()
@@ -65,7 +65,8 @@ if "butce" not in st.session_state:
     )
 
 ODALAR = ["111", "222", "333", "444", "555", "666", "777", "888"]
-KATEGORILER = ["Oda Konaklama", "Restoran/Kafe", "Personel Maaşı", "Fatura/Aidat", "Tedarik/Malzeme", "Diğer"]
+# KİRA KATEGORİSİ EKLENDİ
+KATEGORILER = ["Oda Konaklama", "Restoran/Kafe", "Personel Maaşı", "Kira", "Fatura/Aidat", "Tedarik/Malzeme", "Diğer"]
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "➕ Yeni Rezervasyon", 
@@ -85,7 +86,8 @@ with tab1:
     with col1:
         musteri = st.text_input("Müşteri Adı Soyadı")
         secilen_oda = st.selectbox("Oda Seçin", ODALAR)
-        ucret = st.number_input("Konaklama Ücreti (TL)", min_value=0.0, value=20000.0, step=500.0)
+        # format="%d" eklenerek binlik ayraç görünümü sağlandı (örn: 20.000)
+        ucret = st.number_input("Konaklama Ücreti (TL)", min_value=0, value=20000, step=500, format="%d")
     with col2:
         giris_tarihi = st.date_input("Giriş Tarihi", value=date.today())
         cikis_tarihi = st.date_input("Çıkış Tarihi", value=date.today() + timedelta(days=1))
@@ -228,6 +230,9 @@ with tab4:
         st.markdown("#### 🟢 Gelir Grupları")
         if not df_f.empty and not df_f[df_f["Tür"] == "Gelir"].empty:
             gelir_ozet = df_f[df_f["Tür"] == "Gelir"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
+            # Alt Toplam Satırı Ekleme
+            toplam_row = pd.DataFrame([{"Kategori": "📌 GENEL TOPLAM", "Tutar (TL)": gelir_ozet["Tutar (TL)"].sum()}])
+            gelir_ozet = pd.concat([gelir_ozet, toplam_row], ignore_index=True)
             gelir_ozet["Tutar (TL)"] = gelir_ozet["Tutar (TL)"].apply(lambda x: format_tl(x))
             st.dataframe(gelir_ozet, use_container_width=True)
         else:
@@ -237,6 +242,9 @@ with tab4:
         st.markdown("#### 🔴 Gider Grupları")
         if not df_f.empty and not df_f[df_f["Tür"] == "Gider"].empty:
             gider_ozet = df_f[df_f["Tür"] == "Gider"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
+            # Alt Toplam Satırı Ekleme
+            toplam_row = pd.DataFrame([{"Kategori": "📌 GENEL TOPLAM", "Tutar (TL)": gider_ozet["Tutar (TL)"].sum()}])
+            gider_ozet = pd.concat([gider_ozet, toplam_row], ignore_index=True)
             gider_ozet["Tutar (TL)"] = gider_ozet["Tutar (TL)"].apply(lambda x: format_tl(x))
             st.dataframe(gider_ozet, use_container_width=True)
         else:
@@ -252,11 +260,12 @@ with tab4:
     with col_f2:
         f_kategori = st.selectbox("Kategori", KATEGORILER, key="f_kat_input")
     with col_f3:
-        f_tutar = st.number_input("Tutar (TL)", min_value=0.0, value=5000.0, step=500.0, key="f_tut_input")
+        # format="%d" ile binlik ayraç (20.000) görünümü sağlandı
+        f_tutar = st.number_input("Tutar (TL)", min_value=0, value=5000, step=500, format="%d", key="f_tut_input")
     with col_f4:
         f_tarih = st.date_input("İşlem Tarihi", value=date.today(), key="f_tar_input")
         
-    f_aciklama = st.text_input("Açıklama (Örn: Personel maaşı, Elektrik faturası vb.)", key="f_ack_input")
+    f_aciklama = st.text_input("Açıklama (Örn: Kira ödemesi, Elektrik faturası vb.)", key="f_ack_input")
     
     if st.button("Finans Kaydını Ekle", type="primary"):
         f_id = 1 if df_f.empty else int(df_f["ID"].max()) + 1
@@ -305,7 +314,8 @@ with tab5:
     with col_b2:
         b_kategori = st.selectbox("Kategori Seçin", KATEGORILER, key="b_kat_select")
     with col_b3:
-        b_hedef = st.number_input("Hedef / Limit Tutar (TL)", min_value=0.0, value=20000.0, step=1000.0, key="b_hed_select")
+        # format="%d" eklendi
+        b_hedef = st.number_input("Hedef / Limit Tutar (TL)", min_value=0, value=20000, step=1000, format="%d", key="b_hed_select")
         
     if st.button("Hedef Bütçe Ekle / Güncelle", type="primary"):
         if not df_b.empty:
@@ -327,6 +337,9 @@ with tab5:
     
     if not df_b.empty:
         karsilastirma = []
+        tot_hedef = 0.0
+        tot_gercekleseni = 0.0
+        
         for _, row in df_b.iterrows():
             kat = row["Kategori"]
             tur = row["Tür"]
@@ -340,6 +353,9 @@ with tab5:
                 
             fark = gercekleseni - hedef if tur == "Gelir" else hedef - gercekleseni
             
+            tot_hedef += hedef
+            tot_gercekleseni += gercekleseni
+            
             karsilastirma.append({
                 "ID": row["ID"],
                 "Tür": tur,
@@ -350,7 +366,21 @@ with tab5:
                 "Durum": "✅ Hedef İçi / Başarılı" if fark >= 0 else "⚠️ Limit Aşıldı / Hedef Altı"
             })
             
-        st.dataframe(pd.DataFrame(karsilastirma), use_container_width=True)
+        # Alt Toplam Satırı Ekleme
+        karsilastirma_df = pd.DataFrame(karsilastirma)
+        tot_fark = tot_gercekleseni - tot_hedef
+        toplam_satir = pd.DataFrame([{
+            "ID": "-",
+            "Tür": "-",
+            "Kategori": "📌 GENEL TOPLAM",
+            "Hedef Bütçe (TL)": format_tl(tot_hedef),
+            "Gerçekleşen (TL)": format_tl(tot_gercekleseni),
+            "Fark / Kalan (TL)": format_tl(tot_fark),
+            "Durum": "📊 Genel Özet"
+        }])
+        
+        karsilastirma_df = pd.concat([karsilastirma_df, toplam_satir], ignore_index=True)
+        st.dataframe(karsilastirma_df, use_container_width=True)
         
         st.divider()
         st.subheader("🗑️ Hatalı Bütçe Hedefini Sil")
