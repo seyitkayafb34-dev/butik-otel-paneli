@@ -2,10 +2,32 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 import calendar
+import os
 
 st.set_page_config(page_title="Butik Otel Paneli", layout="wide")
 
-# --- TUTAR FORMATLAMA FONKSİYONU (20000 -> 20.000) ---
+# --- KALICI VERİ DEPOLAMA (CSV) FONKSİYONLARI ---
+REZ_FILE = "rezervasyonlar.csv"
+FINANS_FILE = "finans.csv"
+BUTCE_FILE = "butce.csv"
+
+def load_data(file_path, columns):
+    if os.path.exists(file_path):
+        try:
+            df = pd.read_csv(file_path)
+            # Tarih kolonlarını doğru veri tipine dönüştür
+            for col in df.columns:
+                if "Tarih" in col:
+                    df[col] = pd.to_datetime(df[col]).dt.date
+            return df
+        except Exception:
+            return pd.DataFrame(columns=columns)
+    return pd.DataFrame(columns=columns)
+
+def save_data(df, file_path):
+    df.to_csv(file_path, index=False)
+
+# --- TUTAR FORMATLAMA FONKSİYONU ---
 def format_tl(val, kurus=False):
     try:
         val = float(val)
@@ -16,9 +38,9 @@ def format_tl(val, kurus=False):
     except:
         return str(val)
 
-# --- KULLANICI GİRİŞ KONTROLÜ (OTURUM KORUMALI) ---
+# --- KULLANICI GİRİŞ KONTROLÜ ---
 USERS = {
-    "Admin": "Yigido58"
+    "admin": "yigido58"
 }
 
 if "authenticated" not in st.session_state:
@@ -36,7 +58,7 @@ if not st.session_state["authenticated"]:
             st.error("Hatalı kullanıcı adı veya şifre!")
     st.stop()
 
-# --- HEADER & ÇIKIŞ BUTONU (SOL MENÜSÜZ, TAM EKRAN DÜZENİ) ---
+# --- HEADER & ÇIKIŞ BUTONU ---
 col_head1, col_head2 = st.columns([8, 2])
 with col_head1:
     st.title("🏨 Butik Otel Yönetim Paneli")
@@ -48,24 +70,21 @@ with col_head2:
 
 st.divider()
 
-# --- VERİ ALANLARI (SESSION STATE HAZIRLIĞI) ---
+# --- KALICI VERİLERİ YÜKLEME ---
+REZ_COLS = ["ID", "Müşteri Adı", "Oda No", "Giriş Tarihi", "Çıkış Tarihi", "Ücret (TL)"]
+FINANS_COLS = ["ID", "Tarih", "Tür", "Kategori", "Açıklama", "Tutar (TL)"]
+BUTCE_COLS = ["ID", "Tür", "Kategori", "Hedef Bütçe (TL)"]
+
 if "rezervasyonlar" not in st.session_state:
-    st.session_state["rezervasyonlar"] = pd.DataFrame(
-        columns=["ID", "Müşteri Adı", "Oda No", "Giriş Tarihi", "Çıkış Tarihi", "Ücret (TL)"]
-    )
+    st.session_state["rezervasyonlar"] = load_data(REZ_FILE, REZ_COLS)
 
 if "finans" not in st.session_state:
-    st.session_state["finans"] = pd.DataFrame(
-        columns=["ID", "Tarih", "Tür", "Kategori", "Açıklama", "Tutar (TL)"]
-    )
+    st.session_state["finans"] = load_data(FINANS_FILE, FINANS_COLS)
 
 if "butce" not in st.session_state:
-    st.session_state["butce"] = pd.DataFrame(
-        columns=["ID", "Tür", "Kategori", "Hedef Bütçe (TL)"]
-    )
+    st.session_state["butce"] = load_data(BUTCE_FILE, BUTCE_COLS)
 
 ODALAR = ["111", "222", "333", "444", "555", "666", "777", "888"]
-# KİRA KATEGORİSİ EKLENDİ
 KATEGORILER = ["Oda Konaklama", "Restoran/Kafe", "Personel Maaşı", "Kira", "Fatura/Aidat", "Tedarik/Malzeme", "Diğer"]
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -86,7 +105,6 @@ with tab1:
     with col1:
         musteri = st.text_input("Müşteri Adı Soyadı")
         secilen_oda = st.selectbox("Oda Seçin", ODALAR)
-        # format="%d" eklenerek binlik ayraç görünümü sağlandı (örn: 20.000)
         ucret = st.number_input("Konaklama Ücreti (TL)", min_value=0, value=20000, step=500, format="%d")
     with col2:
         giris_tarihi = st.date_input("Giriş Tarihi", value=date.today())
@@ -125,6 +143,7 @@ with tab1:
                     "Ücret (TL)": ucret
                 }])
                 st.session_state["rezervasyonlar"] = pd.concat([df, yeni_kayit], ignore_index=True)
+                save_data(st.session_state["rezervasyonlar"], REZ_FILE)
                 
                 # Otomatik Finans Geliri Ekleme
                 df_finans = st.session_state["finans"]
@@ -138,8 +157,9 @@ with tab1:
                     "Tutar (TL)": ucret
                 }])
                 st.session_state["finans"] = pd.concat([df_finans, yeni_gelir], ignore_index=True)
+                save_data(st.session_state["finans"], FINANS_FILE)
                 
-                st.success(f"✅ Oda {secilen_oda} için {musteri} adına rezervasyon ve {format_tl(ucret)} TL gelir kaydedildi!")
+                st.success(f"✅ Oda {secilen_oda} için {musteri} adına rezervasyon ve {format_tl(ucret)} TL gelir başarıyla kaydedildi!")
 
 # ---------------------------------------------------------
 # TAB 2: AYLIK DOLULUK TAKVİMİ EKRANI
@@ -199,6 +219,7 @@ with tab3:
         
         if st.button("Seçilen Rezervasyonu Sil", type="secondary"):
             st.session_state["rezervasyonlar"] = df[df["ID"] != silinecek_id].reset_index(drop=True)
+            save_data(st.session_state["rezervasyonlar"], REZ_FILE)
             st.success(f"ID: {silinecek_id} numaralı rezervasyon başarıyla silindi!")
             st.rerun()
     else:
@@ -230,7 +251,6 @@ with tab4:
         st.markdown("#### 🟢 Gelir Grupları")
         if not df_f.empty and not df_f[df_f["Tür"] == "Gelir"].empty:
             gelir_ozet = df_f[df_f["Tür"] == "Gelir"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
-            # Alt Toplam Satırı Ekleme
             toplam_row = pd.DataFrame([{"Kategori": "📌 GENEL TOPLAM", "Tutar (TL)": gelir_ozet["Tutar (TL)"].sum()}])
             gelir_ozet = pd.concat([gelir_ozet, toplam_row], ignore_index=True)
             gelir_ozet["Tutar (TL)"] = gelir_ozet["Tutar (TL)"].apply(lambda x: format_tl(x))
@@ -242,7 +262,6 @@ with tab4:
         st.markdown("#### 🔴 Gider Grupları")
         if not df_f.empty and not df_f[df_f["Tür"] == "Gider"].empty:
             gider_ozet = df_f[df_f["Tür"] == "Gider"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
-            # Alt Toplam Satırı Ekleme
             toplam_row = pd.DataFrame([{"Kategori": "📌 GENEL TOPLAM", "Tutar (TL)": gider_ozet["Tutar (TL)"].sum()}])
             gider_ozet = pd.concat([gider_ozet, toplam_row], ignore_index=True)
             gider_ozet["Tutar (TL)"] = gider_ozet["Tutar (TL)"].apply(lambda x: format_tl(x))
@@ -260,7 +279,6 @@ with tab4:
     with col_f2:
         f_kategori = st.selectbox("Kategori", KATEGORILER, key="f_kat_input")
     with col_f3:
-        # format="%d" ile binlik ayraç (20.000) görünümü sağlandı
         f_tutar = st.number_input("Tutar (TL)", min_value=0, value=5000, step=500, format="%d", key="f_tut_input")
     with col_f4:
         f_tarih = st.date_input("İşlem Tarihi", value=date.today(), key="f_tar_input")
@@ -278,6 +296,7 @@ with tab4:
             "Tutar (TL)": f_tutar
         }])
         st.session_state["finans"] = pd.concat([df_f, yeni_finans_kaydi], ignore_index=True)
+        save_data(st.session_state["finans"], FINANS_FILE)
         st.success(f"✅ {f_tur} kaydı eklendi!")
         st.rerun()
 
@@ -295,6 +314,7 @@ with tab4:
         )
         if st.button("Seçilen Finans Kaydını Sil"):
             st.session_state["finans"] = df_f[df_f["ID"] != silinecek_f_id].reset_index(drop=True)
+            save_data(st.session_state["finans"], FINANS_FILE)
             st.success("İşlem silindi!")
             st.rerun()
 
@@ -314,7 +334,6 @@ with tab5:
     with col_b2:
         b_kategori = st.selectbox("Kategori Seçin", KATEGORILER, key="b_kat_select")
     with col_b3:
-        # format="%d" eklendi
         b_hedef = st.number_input("Hedef / Limit Tutar (TL)", min_value=0, value=20000, step=1000, format="%d", key="b_hed_select")
         
     if st.button("Hedef Bütçe Ekle / Güncelle", type="primary"):
@@ -329,6 +348,7 @@ with tab5:
             "Hedef Bütçe (TL)": b_hedef
         }])
         st.session_state["butce"] = pd.concat([df_b, yeni_b], ignore_index=True)
+        save_data(st.session_state["butce"], BUTCE_FILE)
         st.success(f"✅ {b_kategori} kategorisi için bütçe hedefi güncellendi!")
         st.rerun()
 
@@ -366,7 +386,6 @@ with tab5:
                 "Durum": "✅ Hedef İçi / Başarılı" if fark >= 0 else "⚠️ Limit Aşıldı / Hedef Altı"
             })
             
-        # Alt Toplam Satırı Ekleme
         karsilastirma_df = pd.DataFrame(karsilastirma)
         tot_fark = tot_gercekleseni - tot_hedef
         toplam_satir = pd.DataFrame([{
@@ -391,6 +410,7 @@ with tab5:
         )
         if st.button("Seçilen Bütçe Kalemini Sil"):
             st.session_state["butce"] = df_b[df_b["ID"] != silinecek_b_id].reset_index(drop=True)
+            save_data(st.session_state["butce"], BUTCE_FILE)
             st.success("Bütçe kalemi başarıyla silindi!")
             st.rerun()
     else:
