@@ -15,7 +15,6 @@ def get_connection():
 def init_db():
     conn = get_connection()
     c = conn.cursor()
-    # Rezervasyonlar Tablosu
     c.execute('''
         CREATE TABLE IF NOT EXISTS rezervasyonlar (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +25,6 @@ def init_db():
             ucret REAL
         )
     ''')
-    # Finans Tablosu
     c.execute('''
         CREATE TABLE IF NOT EXISTS finans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +35,6 @@ def init_db():
             tutar REAL
         )
     ''')
-    # Bütçe Tablosu
     c.execute('''
         CREATE TABLE IF NOT EXISTS butce (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +46,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Veri tabanını ilklendir
 init_db()
 
 # --- VERİ İŞLEME FONKSİYONLARI ---
@@ -169,10 +165,8 @@ with tab1:
             else:
                 conn = get_connection()
                 c = conn.cursor()
-                # Rezervasyonu ekle
                 c.execute("INSERT INTO rezervasyonlar (musteri, oda_no, giris_tarihi, cikis_tarihi, ucret) VALUES (?, ?, ?, ?, ?)",
                           (musteri, secilen_oda, giris_tarihi.isoformat(), cikis_tarihi.isoformat(), ucret))
-                # Otomatik Finans Geliri ekle
                 c.execute("INSERT INTO finans (tarih, tur, kategori, aciklama, tutar) VALUES (?, ?, ?, ?, ?)",
                           (giris_tarihi.isoformat(), "Gelir", "Oda Konaklama", f"Oda {secilen_oda} - {musteri}", ucret))
                 conn.commit()
@@ -191,7 +185,7 @@ with tab2:
     with col_yil:
         secilen_yil = st.selectbox("Yıl", range(2025, 2030), index=1)
     with col_ay:
-        aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+        aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylul", "Ekim", "Kasım", "Aralık"]
         secilen_ay_adi = st.selectbox("Ay", aylar, index=date.today().month - 1)
         secilen_ay = aylar.index(secilen_ay_adi) + 1
 
@@ -249,7 +243,7 @@ with tab3:
         st.info("Sistemde henüz kayıtlı bir rezervasyon bulunmuyor.")
 
 # ---------------------------------------------------------
-# TAB 4: NAKİT AKIŞI & GRUPLAR TOPLAMI
+# TAB 4: NAKİT AKIŞI & GRUPLAR TOPLAMI (DÜZELTİLDİ)
 # ---------------------------------------------------------
 with tab4:
     st.subheader("💰 Nakit Akışı & Sınıf/Kategori Grupları")
@@ -271,10 +265,10 @@ with tab4:
     col_g1, col_g2 = st.columns(2)
     
     with col_g1:
-        st.markdown("#### 🟢 Gelir Grupları")
+        st.markdown("#### 🟢 Gelir Grupları Toplamı")
         if not df_f.empty and not df_f[df_f["Tür"] == "Gelir"].empty:
             gelir_ozet = df_f[df_f["Tür"] == "Gelir"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
-            toplam_row = pd.DataFrame([{"Kategori": "📌 GENEL TOPLAM", "Tutar (TL)": gelir_ozet["Tutar (TL)"].sum()}])
+            toplam_row = pd.DataFrame([{"Kategori": "📌 TOPLAM GELİR", "Tutar (TL)": gelir_ozet["Tutar (TL)"].sum()}])
             gelir_ozet = pd.concat([gelir_ozet, toplam_row], ignore_index=True)
             gelir_ozet["Tutar (TL)"] = gelir_ozet["Tutar (TL)"].apply(lambda x: format_tl(x))
             st.dataframe(gelir_ozet, use_container_width=True)
@@ -282,10 +276,10 @@ with tab4:
             st.info("Henüz kaydedilmiş gelir bulunmuyor.")
             
     with col_g2:
-        st.markdown("#### 🔴 Gider Grupları")
+        st.markdown("#### 🔴 Gider Grupları Toplamı")
         if not df_f.empty and not df_f[df_f["Tür"] == "Gider"].empty:
             gider_ozet = df_f[df_f["Tür"] == "Gider"].groupby("Kategori")["Tutar (TL)"].sum().reset_index()
-            toplam_row = pd.DataFrame([{"Kategori": "📌 GENEL TOPLAM", "Tutar (TL)": gider_ozet["Tutar (TL)"].sum()}])
+            toplam_row = pd.DataFrame([{"Kategori": "📌 TOPLAM GİDER", "Tutar (TL)": gider_ozet["Tutar (TL)"].sum()}])
             gider_ozet = pd.concat([gider_ozet, toplam_row], ignore_index=True)
             gider_ozet["Tutar (TL)"] = gider_ozet["Tutar (TL)"].apply(lambda x: format_tl(x))
             st.dataframe(gider_ozet, use_container_width=True)
@@ -340,7 +334,7 @@ with tab4:
             st.rerun()
 
 # ---------------------------------------------------------
-# TAB 5: BÜTÇE & HEDEF PLANLAMA TABI
+# TAB 5: BÜTÇE & HEDEF PLANLAMA (NET KÂR/ZARAR GELİR-GİDER MATEMATİĞİ DÜZELTİLDİ)
 # ---------------------------------------------------------
 with tab5:
     st.subheader("🎯 Bütçe & Hedef Nakit Akışı Planlama")
@@ -360,7 +354,6 @@ with tab5:
     if st.button("Hedef Bütçe Ekle / Güncelle", type="primary"):
         conn = get_connection()
         c = conn.cursor()
-        # Aynı kategoride kayıt varsa sil, sonra yeni hedefi ekle
         c.execute("DELETE FROM butce WHERE kategori = ?", (b_kategori,))
         c.execute("INSERT INTO butce (tur, kategori, hedef_butce) VALUES (?, ?, ?)",
                   (b_tur, b_kategori, b_hedef))
@@ -374,8 +367,11 @@ with tab5:
     
     if not df_b.empty:
         karsilastirma = []
-        tot_hedef = 0.0
-        tot_gercekleseni = 0.0
+        
+        tot_gelir_hedef = 0.0
+        tot_gelir_gercekleseni = 0.0
+        tot_gider_hedef = 0.0
+        tot_gider_gercekleseni = 0.0
         
         for _, row in df_b.iterrows():
             kat = row["Kategori"]
@@ -388,10 +384,14 @@ with tab5:
             else:
                 gercekleseni = 0.0
                 
-            fark = gercekleseni - hedef if tur == "Gelir" else hedef - gercekleseni
-            
-            tot_hedef += hedef
-            tot_gercekleseni += gercekleseni
+            if tur == "Gelir":
+                fark = gercekleseni - hedef
+                tot_gelir_hedef += hedef
+                tot_gelir_gercekleseni += gercekleseni
+            else:
+                fark = hedef - gercekleseni
+                tot_gider_hedef += hedef
+                tot_gider_gercekleseni += gercekleseni
             
             karsilastirma.append({
                 "ID": row["ID"],
@@ -404,15 +404,20 @@ with tab5:
             })
             
         karsilastirma_df = pd.DataFrame(karsilastirma)
-        tot_fark = tot_gercekleseni - tot_hedef
+        
+        # GELİR VE GİDERDEN NET BAKİYE (KÂR/ZARAR) HESAPLAMA
+        net_hedef_bakiye = tot_gelir_hedef - tot_gider_hedef
+        net_gerceklesen_bakiye = tot_gelir_gercekleseni - tot_gider_gercekleseni
+        net_fark = net_gerceklesen_bakiye - net_hedef_bakiye
+        
         toplam_satir = pd.DataFrame([{
             "ID": "-",
-            "Tür": "-",
-            "Kategori": "📌 GENEL TOPLAM",
-            "Hedef Bütçe (TL)": format_tl(tot_hedef),
-            "Gerçekleşen (TL)": format_tl(tot_gercekleseni),
-            "Fark / Kalan (TL)": format_tl(tot_fark),
-            "Durum": "📊 Genel Özet"
+            "Tür": "Net Bakiye",
+            "Kategori": "📌 NET KÂR / ZARAR TOPLAMI",
+            "Hedef Bütçe (TL)": format_tl(net_hedef_bakiye),
+            "Gerçekleşen (TL)": format_tl(net_gerceklesen_bakiye),
+            "Fark / Kalan (TL)": format_tl(net_fark),
+            "Durum": "✅ Kâr Hedefi Aşıldı" if net_fark >= 0 else "⚠️ Kâr Hedefin Altında"
         }])
         
         karsilastirma_df = pd.concat([karsilastirma_df, toplam_satir], ignore_index=True)
