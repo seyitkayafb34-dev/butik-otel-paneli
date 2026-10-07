@@ -2,7 +2,7 @@ import streamlit as st
 
 # Kullanıcı adı ve şifre tanımlamaları
 USERS = {
-    "admin": "otel123",  # Kullanıcı adı: admin, Şifre: otel123
+    "admin": "otel123",  # Kullanıcı adı: admin, Şifre: yigido58
     "yonetici": "sifre456"
 }
 
