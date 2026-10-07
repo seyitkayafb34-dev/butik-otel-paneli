@@ -89,7 +89,7 @@ def format_tl(val, kurus=False):
 
 # --- KULLANICI GİRİŞ KONTROLÜ ---
 USERS = {
-    "admin": "Otel2026!Sifre"
+    "admin": "yigido58"
 }
 
 if "authenticated" not in st.session_state:
