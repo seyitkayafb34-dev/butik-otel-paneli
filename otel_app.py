@@ -2,30 +2,79 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 import calendar
-import os
+import sqlite3
 
 st.set_page_config(page_title="Butik Otel Paneli", layout="wide")
 
-# --- KALICI VERİ DEPOLAMA (CSV) FONKSİYONLARI ---
-REZ_FILE = "rezervasyonlar.csv"
-FINANS_FILE = "finans.csv"
-BUTCE_FILE = "butce.csv"
+# --- SQLITE VERİ TABANI BAĞLANTISI VE TABLO KURULUMLARI ---
+DB_NAME = "otel_veri.db"
 
-def load_data(file_path, columns):
-    if os.path.exists(file_path):
-        try:
-            df = pd.read_csv(file_path)
-            # Tarih kolonlarını doğru veri tipine dönüştür
-            for col in df.columns:
-                if "Tarih" in col:
-                    df[col] = pd.to_datetime(df[col]).dt.date
-            return df
-        except Exception:
-            return pd.DataFrame(columns=columns)
-    return pd.DataFrame(columns=columns)
+def get_connection():
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-def save_data(df, file_path):
-    df.to_csv(file_path, index=False)
+def init_db():
+    conn = get_connection()
+    c = conn.cursor()
+    # Rezervasyonlar Tablosu
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS rezervasyonlar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            musteri TEXT,
+            oda_no TEXT,
+            giris_tarihi TEXT,
+            cikis_tarihi TEXT,
+            ucret REAL
+        )
+    ''')
+    # Finans Tablosu
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS finans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tarih TEXT,
+            tur TEXT,
+            kategori TEXT,
+            aciklama TEXT,
+            tutar REAL
+        )
+    ''')
+    # Bütçe Tablosu
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS butce (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tur TEXT,
+            kategori TEXT,
+            hedef_butce REAL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Veri tabanını ilklendir
+init_db()
+
+# --- VERİ İŞLEME FONKSİYONLARI ---
+def load_rezervasyonlar():
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT id as ID, musteri as 'Müşteri Adı', oda_no as 'Oda No', giris_tarihi as 'Giriş Tarihi', cikis_tarihi as 'Çıkış Tarihi', ucret as 'Ücret (TL)' FROM rezervasyonlar", conn)
+    conn.close()
+    if not df.empty:
+        df["Giriş Tarihi"] = pd.to_datetime(df["Giriş Tarihi"]).dt.date
+        df["Çıkış Tarihi"] = pd.to_datetime(df["Çıkış Tarihi"]).dt.date
+    return df
+
+def load_finans():
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT id as ID, tarih as Tarih, tur as Tür, kategori as Kategori, aciklama as Açıklama, tutar as 'Tutar (TL)' FROM finans", conn)
+    conn.close()
+    if not df.empty:
+        df["Tarih"] = pd.to_datetime(df["Tarih"]).dt.date
+    return df
+
+def load_butce():
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT id as ID, tur as Tür, kategori as Kategori, hedef_butce as 'Hedef Bütçe (TL)' FROM butce", conn)
+    conn.close()
+    return df
 
 # --- TUTAR FORMATLAMA FONKSİYONU ---
 def format_tl(val, kurus=False):
@@ -40,7 +89,7 @@ def format_tl(val, kurus=False):
 
 # --- KULLANICI GİRİŞ KONTROLÜ ---
 USERS = {
-    "admin": "yigido58"
+    "admin": "Otel2026!Sifre"
 }
 
 if "authenticated" not in st.session_state:
@@ -69,20 +118,6 @@ with col_head2:
         st.rerun()
 
 st.divider()
-
-# --- KALICI VERİLERİ YÜKLEME ---
-REZ_COLS = ["ID", "Müşteri Adı", "Oda No", "Giriş Tarihi", "Çıkış Tarihi", "Ücret (TL)"]
-FINANS_COLS = ["ID", "Tarih", "Tür", "Kategori", "Açıklama", "Tutar (TL)"]
-BUTCE_COLS = ["ID", "Tür", "Kategori", "Hedef Bütçe (TL)"]
-
-if "rezervasyonlar" not in st.session_state:
-    st.session_state["rezervasyonlar"] = load_data(REZ_FILE, REZ_COLS)
-
-if "finans" not in st.session_state:
-    st.session_state["finans"] = load_data(FINANS_FILE, FINANS_COLS)
-
-if "butce" not in st.session_state:
-    st.session_state["butce"] = load_data(BUTCE_FILE, BUTCE_COLS)
 
 ODALAR = ["111", "222", "333", "444", "555", "666", "777", "888"]
 KATEGORILER = ["Oda Konaklama", "Restoran/Kafe", "Personel Maaşı", "Kira", "Fatura/Aidat", "Tedarik/Malzeme", "Diğer"]
@@ -116,7 +151,7 @@ with tab1:
         elif not musteri.strip():
             st.error("❌ Lütfen müşteri adını giriniz.")
         else:
-            df = st.session_state["rezervasyonlar"]
+            df = load_rezervasyonlar()
             oda_kayitlari = df[df["Oda No"] == secilen_oda] if not df.empty else pd.DataFrame()
             
             cakisma = False
@@ -132,34 +167,19 @@ with tab1:
             if cakisma:
                 st.error(f"⛔ **Oda {secilen_oda}** seçtiğiniz **{giris_tarihi.strftime('%d.%m.%Y')} - {cikis_tarihi.strftime('%d.%m.%Y')}** tarihleri arasında ZATEN DOLU!")
             else:
-                yeni_id = 1 if df.empty else int(df["ID"].max()) + 1
-                
-                yeni_kayit = pd.DataFrame([{
-                    "ID": yeni_id,
-                    "Müşteri Adı": musteri,
-                    "Oda No": secilen_oda,
-                    "Giriş Tarihi": giris_tarihi,
-                    "Çıkış Tarihi": cikis_tarihi,
-                    "Ücret (TL)": ucret
-                }])
-                st.session_state["rezervasyonlar"] = pd.concat([df, yeni_kayit], ignore_index=True)
-                save_data(st.session_state["rezervasyonlar"], REZ_FILE)
-                
-                # Otomatik Finans Geliri Ekleme
-                df_finans = st.session_state["finans"]
-                finans_id = 1 if df_finans.empty else int(df_finans["ID"].max()) + 1
-                yeni_gelir = pd.DataFrame([{
-                    "ID": finans_id,
-                    "Tarih": giris_tarihi,
-                    "Tür": "Gelir",
-                    "Kategori": "Oda Konaklama",
-                    "Açıklama": f"Oda {secilen_oda} - {musteri}",
-                    "Tutar (TL)": ucret
-                }])
-                st.session_state["finans"] = pd.concat([df_finans, yeni_gelir], ignore_index=True)
-                save_data(st.session_state["finans"], FINANS_FILE)
+                conn = get_connection()
+                c = conn.cursor()
+                # Rezervasyonu ekle
+                c.execute("INSERT INTO rezervasyonlar (musteri, oda_no, giris_tarihi, cikis_tarihi, ucret) VALUES (?, ?, ?, ?, ?)",
+                          (musteri, secilen_oda, giris_tarihi.isoformat(), cikis_tarihi.isoformat(), ucret))
+                # Otomatik Finans Geliri ekle
+                c.execute("INSERT INTO finans (tarih, tur, kategori, aciklama, tutar) VALUES (?, ?, ?, ?, ?)",
+                          (giris_tarihi.isoformat(), "Gelir", "Oda Konaklama", f"Oda {secilen_oda} - {musteri}", ucret))
+                conn.commit()
+                conn.close()
                 
                 st.success(f"✅ Oda {secilen_oda} için {musteri} adına rezervasyon ve {format_tl(ucret)} TL gelir başarıyla kaydedildi!")
+                st.rerun()
 
 # ---------------------------------------------------------
 # TAB 2: AYLIK DOLULUK TAKVİMİ EKRANI
@@ -176,7 +196,7 @@ with tab2:
         secilen_ay = aylar.index(secilen_ay_adi) + 1
 
     _, gun_sayisi = calendar.monthrange(secilen_yil, secilen_ay)
-    df = st.session_state["rezervasyonlar"]
+    df = load_rezervasyonlar()
     matris = {oda: ["🟢 Boş"] * gun_sayisi for oda in ODALAR}
 
     if not df.empty:
@@ -202,7 +222,7 @@ with tab2:
 with tab3:
     st.subheader("📋 Mevcut Rezervasyonlar ve Silme")
     
-    df = st.session_state["rezervasyonlar"]
+    df = load_rezervasyonlar()
     
     if not df.empty:
         gosterim_df = df.copy()
@@ -218,8 +238,11 @@ with tab3:
         )
         
         if st.button("Seçilen Rezervasyonu Sil", type="secondary"):
-            st.session_state["rezervasyonlar"] = df[df["ID"] != silinecek_id].reset_index(drop=True)
-            save_data(st.session_state["rezervasyonlar"], REZ_FILE)
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("DELETE FROM rezervasyonlar WHERE id = ?", (silinecek_id,))
+            conn.commit()
+            conn.close()
             st.success(f"ID: {silinecek_id} numaralı rezervasyon başarıyla silindi!")
             st.rerun()
     else:
@@ -231,7 +254,7 @@ with tab3:
 with tab4:
     st.subheader("💰 Nakit Akışı & Sınıf/Kategori Grupları")
     
-    df_f = st.session_state["finans"]
+    df_f = load_finans()
     
     toplam_gelir = float(df_f[df_f["Tür"] == "Gelir"]["Tutar (TL)"].sum()) if not df_f.empty else 0.0
     toplam_gider = float(df_f[df_f["Tür"] == "Gider"]["Tutar (TL)"].sum()) if not df_f.empty else 0.0
@@ -286,17 +309,12 @@ with tab4:
     f_aciklama = st.text_input("Açıklama (Örn: Kira ödemesi, Elektrik faturası vb.)", key="f_ack_input")
     
     if st.button("Finans Kaydını Ekle", type="primary"):
-        f_id = 1 if df_f.empty else int(df_f["ID"].max()) + 1
-        yeni_finans_kaydi = pd.DataFrame([{
-            "ID": f_id,
-            "Tarih": f_tarih,
-            "Tür": f_tur,
-            "Kategori": f_kategori,
-            "Açıklama": f_aciklama if f_aciklama.strip() else f_kategori,
-            "Tutar (TL)": f_tutar
-        }])
-        st.session_state["finans"] = pd.concat([df_f, yeni_finans_kaydi], ignore_index=True)
-        save_data(st.session_state["finans"], FINANS_FILE)
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("INSERT INTO finans (tarih, tur, kategori, aciklama, tutar) VALUES (?, ?, ?, ?, ?)",
+                  (f_tarih.isoformat(), f_tur, f_kategori, f_aciklama if f_aciklama.strip() else f_kategori, f_tutar))
+        conn.commit()
+        conn.close()
         st.success(f"✅ {f_tur} kaydı eklendi!")
         st.rerun()
 
@@ -313,8 +331,11 @@ with tab4:
             format_func=lambda x: f"ID: {x} - {df_f[df_f['ID'] == x]['Tür'].values[0]}: {df_f[df_f['ID'] == x]['Açıklama'].values[0]} ({format_tl(df_f[df_f['ID'] == x]['Tutar (TL)'].values[0])} TL)"
         )
         if st.button("Seçilen Finans Kaydını Sil"):
-            st.session_state["finans"] = df_f[df_f["ID"] != silinecek_f_id].reset_index(drop=True)
-            save_data(st.session_state["finans"], FINANS_FILE)
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("DELETE FROM finans WHERE id = ?", (silinecek_f_id,))
+            conn.commit()
+            conn.close()
             st.success("İşlem silindi!")
             st.rerun()
 
@@ -325,8 +346,8 @@ with tab5:
     st.subheader("🎯 Bütçe & Hedef Nakit Akışı Planlama")
     st.caption("Kategoriler bazında hedef bütçenizi belirleyin ve gerçekleşen durumla karşılaştırın.")
     
-    df_b = st.session_state["butce"]
-    df_f = st.session_state["finans"]
+    df_b = load_butce()
+    df_f = load_finans()
     
     col_b1, col_b2, col_b3 = st.columns(3)
     with col_b1:
@@ -337,18 +358,14 @@ with tab5:
         b_hedef = st.number_input("Hedef / Limit Tutar (TL)", min_value=0, value=20000, step=1000, format="%d", key="b_hed_select")
         
     if st.button("Hedef Bütçe Ekle / Güncelle", type="primary"):
-        if not df_b.empty:
-            df_b = df_b[~(df_b["Kategori"] == b_kategori)]
-            
-        b_id = 1 if df_b.empty else int(df_b["ID"].max()) + 1
-        yeni_b = pd.DataFrame([{
-            "ID": b_id,
-            "Tür": b_tur,
-            "Kategori": b_kategori,
-            "Hedef Bütçe (TL)": b_hedef
-        }])
-        st.session_state["butce"] = pd.concat([df_b, yeni_b], ignore_index=True)
-        save_data(st.session_state["butce"], BUTCE_FILE)
+        conn = get_connection()
+        c = conn.cursor()
+        # Aynı kategoride kayıt varsa sil, sonra yeni hedefi ekle
+        c.execute("DELETE FROM butce WHERE kategori = ?", (b_kategori,))
+        c.execute("INSERT INTO butce (tur, kategori, hedef_butce) VALUES (?, ?, ?)",
+                  (b_tur, b_kategori, b_hedef))
+        conn.commit()
+        conn.close()
         st.success(f"✅ {b_kategori} kategorisi için bütçe hedefi güncellendi!")
         st.rerun()
 
@@ -409,8 +426,11 @@ with tab5:
             format_func=lambda x: f"ID: {x} - {df_b[df_b['ID'] == x]['Tür'].values[0]}: {df_b[df_b['ID'] == x]['Kategori'].values[0]} ({format_tl(df_b[df_b['ID'] == x]['Hedef Bütçe (TL)'].values[0])} TL)"
         )
         if st.button("Seçilen Bütçe Kalemini Sil"):
-            st.session_state["butce"] = df_b[df_b["ID"] != silinecek_b_id].reset_index(drop=True)
-            save_data(st.session_state["butce"], BUTCE_FILE)
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("DELETE FROM butce WHERE id = ?", (silinecek_b_id,))
+            conn.commit()
+            conn.close()
             st.success("Bütçe kalemi başarıyla silindi!")
             st.rerun()
     else:
