@@ -1,3 +1,40 @@
+import streamlit as st
+
+# Kullanıcı adı ve şifre tanımlamaları
+USERS = {
+    "admin": "otel123",  # Kullanıcı adı: admin, Şifre: otel123
+    "yonetici": "sifre456"
+}
+
+def check_password():
+    """Kullanıcı adı ve şifreyi doğrular."""
+    if "authenticated" not in st.session_state:
+        st.session_state["authenticated"] = False
+
+    if not st.session_state["authenticated"]:
+        st.title("🔒 Butik Otel Paneli Girişi")
+        
+        username = st.text_input("Kullanıcı Adı")
+        password = st.text_input("Şifre", type="password")
+        
+        if st.button("Giriş Yap"):
+            if username in USERS and USERS[username] == password:
+                st.session_state["authenticated"] = True
+                st.success("Giriş başarılı!")
+                st.rerun()
+            else:
+                st.error("Kullanıcı adı veya şifre hatalı!")
+        return False
+    return True
+
+# Eğer giriş yapılmadıysa uygulamanın geri kalanını çalıştırma
+if not check_password():
+    st.stop()
+
+# --- BURADAN SONRASI MEVCUT UYGULAMA KODLARINIZ ---
+st.title("🏨 Butik Otel Yönetim Paneli")
+# ... mevcut otel_app.py kodlarınız buraya gelecek ...
+
 import datetime
 import sqlite3
 import pandas as pd
