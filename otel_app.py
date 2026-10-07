@@ -7,7 +7,7 @@ st.set_page_config(page_title="Butik Otel Paneli", layout="wide")
 
 # --- TUTAR FORMATLAMA FONKSİYONU (20000 -> 20.000) ---
 def format_tl(val, kurus=False):
-    try,
+    try:
         val = float(val)
         if kurus:
             return f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -38,7 +38,7 @@ if not st.session_state["authenticated"]:
 
 # Sol Menüye Çıkış Yap Butonu
 with st.sidebar:
-    st.write(f"👤 **Oturum:** Aktif")
+    st.write("👤 **Oturum:** Aktif")
     if st.button("🔴 Çıkış Yap"):
         st.session_state["authenticated"] = False
         st.rerun()
